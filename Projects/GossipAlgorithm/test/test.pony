@@ -6,15 +6,18 @@ trait Actor
   be add_neighbor(neighbor: Actor tag)
   be receive_rumor()
   be receive_pair(s: F64, w: F64)
+  be report_convergence(main: Main tag)
 
 actor GossipActor is Actor
   let _id: USize
   let _neighbors: Array[Actor tag] = Array[Actor tag]
   var _rumor_count: USize = 0
   var _active: Bool = true
+  var _main: (Main tag | None) = None
 
-  new create(id: USize) =>
+  new create(id: USize, main: Main tag) =>
     _id = id
+    _main = main
 
   be add_neighbor(neighbor: Actor tag) =>
     _neighbors.push(neighbor)
@@ -26,6 +29,7 @@ actor GossipActor is Actor
     _rumor_count = _rumor_count + 1
     if _rumor_count >= 10 then
       _active = false
+      try (_main as Main tag).report_convergence() end
     elseif _active and (_neighbors.size() > 0) then
       let rand = Rand(Time.nanos().u64())
       try
@@ -37,6 +41,11 @@ actor GossipActor is Actor
   be receive_pair(s: F64, w: F64) =>
     None // Do nothing for GossipActor
 
+  be report_convergence(main: Main tag) =>
+    if not _active then
+      main.report_convergence()
+    end
+
 actor PushSumActor is Actor
   let _id: USize
   let _neighbors: Array[Actor tag] = Array[Actor tag]
@@ -45,11 +54,13 @@ actor PushSumActor is Actor
   var _ratio: F64
   var _unchanged_count: USize = 0
   var _active: Bool = true
+  var _main: (Main tag | None) = None
 
-  new create(id: USize) =>
+  new create(id: USize, main: Main tag) =>
     _id = id
     _s = id.f64()
     _ratio = _s / _w
+    _main = main
 
   be add_neighbor(neighbor: Actor tag) =>
     _neighbors.push(neighbor)
@@ -74,6 +85,7 @@ actor PushSumActor is Actor
 
     if _unchanged_count >= 3 then
       _active = false
+      try (_main as Main tag).report_convergence() end
     elseif _active then
       send_pair()
     end
@@ -89,61 +101,78 @@ actor PushSumActor is Actor
       end
     end
 
+  be report_convergence(main: Main tag) =>
+    if not _active then
+      main.report_convergence()
+    end
+
 actor Main
   let env: Env
   let nodes: Array[Actor tag]
   let start_time: U64
+  var converged_count: USize
+  var total_nodes: USize
 
   new create(env': Env) =>
     env = env'
     nodes = Array[Actor tag]
     start_time = Time.nanos()
+    converged_count = 0
+    total_nodes = 0  // Initialize with a default value
 
     if env.args.size() != 4 then
       env.out.print("Usage: project2 numNodes topology algorithm")
-      return
-    end
+    else
+      let num_nodes = try env.args(1)?.usize()? else 10 end
+      let topology = try env.args(2)? else "full" end
+      let algorithm = try env.args(3)? else "gossip" end
 
-    let num_nodes = try env.args(1)?.usize()? else 10 end
-    let topology = try env.args(2)? else "full" end
-    let algorithm = try env.args(3)? else "gossip" end
+      total_nodes = num_nodes
 
-    // Create nodes
-    for i in Range(0, num_nodes) do
-      if algorithm == "gossip" then
-        nodes.push(GossipActor(i))
+      // Create nodes
+      for i in Range(0, num_nodes) do
+        if algorithm == "gossip" then
+          nodes.push(GossipActor(i, this))
+        else
+          nodes.push(PushSumActor(i, this))
+        end
+      end
+
+      // Build topology
+      match topology
+      | "full" => build_full_network(nodes)
+      | "3D" => build_3d_grid(nodes)
+      | "line" => build_line(nodes)
+      | "imp3D" => build_imperfect_3d_grid(nodes)
       else
-        nodes.push(PushSumActor(i))
+        env.out.print("Invalid topology")
+        return
+      end
+
+      // Start algorithm
+      let rand = Rand(Time.nanos().u64())
+      let starter: USize = rand.int(num_nodes.u64()).usize()
+
+      match algorithm
+      | "gossip" =>
+        try 
+          (nodes(starter)? as GossipActor).start_gossip()
+        end
+      | "push-sum" =>
+        try 
+          (nodes(starter)? as PushSumActor).start_push_sum()
+        end
+      else
+        env.out.print("Invalid algorithm")
       end
     end
 
-    // Build topology
-    match topology
-    | "full" => build_full_network(nodes)
-    | "3D" => build_3d_grid(nodes)
-    | "line" => build_line(nodes)
-    | "imp3D" => build_imperfect_3d_grid(nodes)
-    else
-      env.out.print("Invalid topology")
-      return
-    end
-
-    // Start algorithm
-    let rand = Rand(Time.nanos().u64())
-    let starter: USize = rand.int(num_nodes.u64()).usize()
-
-    match algorithm
-    | "gossip" =>
-      try 
-        (nodes(starter)? as GossipActor).start_gossip()
-      end
-    | "push-sum" =>
-      try 
-        (nodes(starter)? as PushSumActor).start_push_sum()
-      end
-    else
-      env.out.print("Invalid algorithm")
-      return
+  be report_convergence() =>
+    converged_count = converged_count + 1
+    if converged_count == total_nodes then
+      let end_time = Time.nanos()
+      let convergence_time = end_time - start_time
+      env.out.print("Convergence time: " + (convergence_time.f64() / 1_000_000.0).string() + " milliseconds")
     end
 
     // Set up timer for convergence check
