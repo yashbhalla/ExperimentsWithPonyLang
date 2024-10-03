@@ -1,7 +1,6 @@
 use "collections"
 use "random"
 use "time"
-use "files"
 
 trait Actor
   be add_neighbor(neighbor: Actor tag)
@@ -9,6 +8,7 @@ trait Actor
   be receive_pair(s: F64, w: F64)
   be simulate_failure(failure_prob: F64)
   be report_convergence(main: Main tag)
+  fun print(msg: String)
 
 actor GossipActor is Actor
   let _id: USize
@@ -17,10 +17,12 @@ actor GossipActor is Actor
   var _active: Bool = true
   var _failed: Bool = false
   var _main: (Main tag | None) = None
+  let _env: Env
 
-  new create(id: USize, main: Main tag) =>
+  new create(id: USize, main: Main tag, env: Env) =>
     _id = id
     _main = main
+    _env = env
 
   be add_neighbor(neighbor: Actor tag) =>
     _neighbors.push(neighbor)
@@ -31,6 +33,7 @@ actor GossipActor is Actor
   be receive_rumor() =>
     if not _failed then
       _rumor_count = _rumor_count + 1
+      print("Actor " + _id.string() + " received rumor. Count: " + _rumor_count.string())
       if _rumor_count >= 10 then
         _active = false
         try (_main as Main tag).report_convergence() end
@@ -50,11 +53,15 @@ actor GossipActor is Actor
     let rand = Rand(Time.nanos().u64())
     if rand.real() < failure_prob then
       _failed = true
+    end
 
   be report_convergence(main: Main tag) =>
     if not _active and not _failed then
       main.report_convergence()
     end
+
+  fun print(msg: String) =>
+    _env.out.print(msg)
 
 actor PushSumActor is Actor
   let _id: USize
@@ -66,15 +73,14 @@ actor PushSumActor is Actor
   var _active: Bool = true
   var _failed: Bool = false
   var _main: (Main tag | None) = None
-  let _log: File
+  let _env: Env
 
-  new create(id: USize, main: Main tag) =>
+  new create(id: USize, main: Main tag, env: Env) =>
     _id = id
     _s = id.f64()
     _ratio = _s / _w
     _main = main
-    _log = File(FilePath(FileAuth.create(), "push_sum_" + id.string() + ".log"))
-    _log.print("Initial s: " + _s.string() + ", w: " + _w.string() + ", ratio: " + _ratio.string())
+    _env = env
 
   be add_neighbor(neighbor: Actor tag) =>
     _neighbors.push(neighbor)
@@ -87,13 +93,11 @@ actor PushSumActor is Actor
 
   be receive_pair(s_received: F64, w_received: F64) =>
     if not _failed then
+      print("Actor " + _id.string() + " received pair: s=" + s_received.string() + ", w=" + w_received.string())
       let old_ratio = _ratio
       _s = _s + s_received
       _w = _w + w_received
       _ratio = _s / _w
-
-      _log.print("Received s: " + s_received.string() + ", w: " + w_received.string())
-      _log.print("Updated s: " + _s.string() + ", w: " + _w.string() + ", ratio: " + _ratio.string())
 
       if (_ratio - old_ratio).abs() < 1e-10 then
         _unchanged_count = _unchanged_count + 1
@@ -103,7 +107,6 @@ actor PushSumActor is Actor
 
       if _unchanged_count >= 3 then
         _active = false
-        _log.print("Converged! Final ratio: " + _ratio.string())
         try (_main as Main tag).report_convergence() end
       elseif _active then
         send_pair()
@@ -117,7 +120,6 @@ actor PushSumActor is Actor
         let neighbor = _neighbors(rand.int(_neighbors.size().u64()).usize())?
         _s = _s / 2
         _w = _w / 2
-        _log.print("Sending s: " + _s.string() + ", w: " + _w.string() + " to neighbor " + neighbor.string())
         neighbor.receive_pair(_s, _w)
       end
     end
@@ -126,20 +128,25 @@ actor PushSumActor is Actor
     let rand = Rand(Time.nanos().u64())
     if rand.real() < failure_prob then
       _failed = true
+    end
 
   be report_convergence(main: Main tag) =>
     if not _active and not _failed then
       main.report_convergence()
     end
 
+  fun print(msg: String) =>
+    _env.out.print(msg)
+
 actor Main
   let env: Env
   let nodes: Array[Actor tag]
   let start_time: U64
   var converged_count: USize
-  let total_nodes: USize
-  let failure_prob: F64
+  var total_nodes: USize
+  var failure_prob: F64
   let final_ratios: Array[F64] = Array[F64]
+  let _timers: Timers = Timers
 
   new create(env': Env) =>
     env = env'
@@ -148,6 +155,8 @@ actor Main
     converged_count = 0
     total_nodes = 0
     failure_prob = 0.0
+
+    env.out.print("Starting program")
 
     if env.args.size() != 5 then
       env.out.print("Usage: project2 numNodes topology algorithm failureProb")
@@ -164,9 +173,9 @@ actor Main
     // Create nodes
     for i in Range(0, num_nodes) do
       if algorithm == "gossip" then
-        nodes.push(GossipActor(i, this))
+        nodes.push(GossipActor(i, this, env))
       else
-        nodes.push(PushSumActor(i, this))
+        nodes.push(PushSumActor(i, this, env))
       end
     end
 
@@ -204,8 +213,15 @@ actor Main
       return
     end
 
+    env.out.print("Finished setup, starting algorithm")
+
+    // Set a timeout
+    let timeout_timer = Timer(TimeoutNotify(this), 60_000_000_000) // 60 seconds timeout
+    _timers(consume timeout_timer)
+
   be report_convergence() =>
     converged_count = converged_count + 1
+    env.out.print("Node converged. Total: " + converged_count.string() + "/" + total_nodes.string())
     let active_nodes = nodes.size() - (failure_prob * nodes.size().f64()).usize()
     if converged_count == active_nodes then
       let end_time = Time.nanos()
@@ -214,13 +230,24 @@ actor Main
       env.out.print("Failure probability: " + failure_prob.string())
       env.out.print("Active nodes: " + active_nodes.string() + "/" + nodes.size().string())
       print_final_ratios()
+    end
+
+  be timeout() =>
+    env.out.print("Timeout reached. Program terminating.")
+    env.out.print("Converged nodes: " + converged_count.string() + "/" + total_nodes.string())
 
   fun print_final_ratios() =>
     env.out.print("Final ratios:")
+    var sum: F64 = 0.0
     for ratio in final_ratios.values() do
       env.out.print(ratio.string())
+      sum = sum + ratio
     end
-    let avg_ratio = final_ratios.fold[F64]({(sum, x) => sum + x}, 0.0) / final_ratios.size().f64()
+    let avg_ratio = if final_ratios.size() > 0 then
+      sum / final_ratios.size().f64()
+    else
+      0.0
+    end
     env.out.print("Average ratio: " + avg_ratio.string())
 
   fun build_full_network(network: Array[Actor tag]) =>
@@ -273,3 +300,13 @@ actor Main
         end
       end
     end
+
+class TimeoutNotify is TimerNotify
+  let _main: Main
+
+  new iso create(main: Main) =>
+    _main = main
+
+  fun ref apply(timer: Timer, count: U64): Bool =>
+    _main.timeout()
+    false
