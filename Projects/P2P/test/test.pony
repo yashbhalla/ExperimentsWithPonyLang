@@ -24,7 +24,6 @@ actor ChordNetwork
   var _total_hops: U64 = 0
   var _total_requests: U64 = 0
   let _rng: Rand
-  let _m: USize = 160 // 160-bit identifier space
 
   new create(env: Env, num_nodes: USize, num_requests: USize) =>
     _env = env
@@ -36,8 +35,8 @@ actor ChordNetwork
 
   be initialize() =>
     for i in Range(0, _num_nodes) do
-      let id = _rng.u64() % (U64(1) << _m)
-      let node = ChordNode(this, id, _m)
+      let id = _rng.u64()
+      let node = ChordNode(this, id)
       _node_ids.push(id)
       _nodes(id) = node
     end
@@ -46,20 +45,13 @@ actor ChordNetwork
       bubble_sort(_node_ids)?
 
       for i in Range(0, _num_nodes) do
-        let node = _nodes(_node_ids(i)?)?
-        node.join(_nodes(_node_ids(0)?)?)
+        let next = (i + 1) % _num_nodes
+        _nodes(_node_ids(i)?)?.set_successor(_node_ids(next)?)
       end
 
       for node in _nodes.values() do
-        node.stabilize()
-        node.fix_fingers()
+        node.simulate_requests(_num_requests)
       end
-
-      Timer(Time.from_seconds(5), {() => 
-        for node in _nodes.values() do
-          node.simulate_requests(_num_requests)
-        end
-      })
     else
       _env.out.print("Error during initialization")
     end
@@ -94,97 +86,33 @@ actor ChordNetwork
 actor ChordNode
   let _network: ChordNetwork
   let _id: U64
-  var _successor: (ChordNode | None) = None
-  var _predecessor: (ChordNode | None) = None
-  let _finger_table: Array[ChordNode]
-  let _m: USize
+  var _successor_id: U64 = 0
   let _rng: Rand
 
-  new create(network: ChordNetwork, node_id: U64, m: USize) =>
+  new create(network: ChordNetwork, node_id: U64) =>
     _network = network
     _id = node_id
-    _m = m
-    _finger_table = Array[ChordNode](_m)
     _rng = Rand(Time.nanos().u64())
 
-  be join(node: ChordNode) =>
-    node.find_successor(_id, this)
+  be set_successor(succ_id: U64) =>
+    _successor_id = succ_id
 
-  be found_successor(s: ChordNode) =>
-    _successor = s
-    s.notify(this)
-
-  be notify(predecessor: ChordNode) =>
-    if (_predecessor is None) or (predecessor._id > (_predecessor as ChordNode)._id) then
-      _predecessor = predecessor
+  be simulate_requests(num_requests: USize) =>
+    for _ in Range(0, num_requests) do
+      let key = _rng.u64()
+      _network.lookup(key, _id, 0)
     end
 
-  be stabilize() =>
-    match _successor
-    | let s: ChordNode =>
-      s.get_predecessor(this)
+  be do_lookup(key: U64, origin: U64, hops: U64) =>
+    if between_right_inclusive(key) then
+      _network.report_hops(hops + 1)
+    else
+      _network.lookup(key, _successor_id, hops + 1)
     end
 
-  be got_predecessor(predecessor: (ChordNode | None)) =>
-    match predecessor
-    | let p: ChordNode =>
-      if (p._id > _id) and (p._id < (_successor as ChordNode)._id) then
-        _successor = p
-        p.notify(this)
-      end  
-    end  
-   Timer(Time.from_seconds(1), {() => this.stabilize()})
-
-  be fix_fingers() =>
-    for i in Range(0, \_m) do  
-      let next\_id = (\_id + (U64(1) << i)) % (U64(1) << \_m)
-      find\_successor(next\_id, this~update\_finger(i))
-    end  
-    Timer(Time.from\_seconds(1), {() => this.fix\_fingers()})
-
-  be update_finger(i: USize, node: ChordNode) =>  
-    \_finger\_table(i) = node
-
-  be find_successor(id: U64, requester: ChordNode) =>  
-    if between_right_inclusive(id, \_id, (\_successor as ChordNode).\_id) then  
-      requester.found\_successor(\_successor as ChordNode)
-    else  
-      let closest = closest_preceding_node(id)
-      closest.find_successor(id, requester)
-    end
-
-  fun ref closest_preceding_node(id: U64): ChordNode =>  
-    for i in Range((\_m - 1), 0, -1) do  
-      if (\_finger_table(i).\_id > \_id) and (\_finger_table(i).\_id < id) then  
-        return \_finger_table(i)
-      end  
-    end  
-  this
-
-  be get_predecessor(requester: ChordNode) =>  
-    requester.got_predecessor(\_predecessor)
-
-  be simulate_requests(num_requests: USize) =>  
-    for \_ in Range(0, num\_requests) do  
-      let key = \_rng.u64() % (U64(1) << \_m)
-      \_network.lookup(key, \_id, 0)
-      Timer(Time.from\_seconds(1), {() =>   
-      let key = \_rng.u64() % (U64(1) << \_m)
-      \_network.lookup(key, \_id, 0)
-      })
-    end
-
-  be do_lookup(key: U64, origin: U64, hops: U64) =>  
-    if between_right_inclusive(key, \_id, (\_successor as ChordNode).\_id) then   
-      \_network.report_hops(hops + 1)
-    else   
-      let next_node = closest_preceding_node(key)
-      \_network.lookup(key, next_node.\_id, hops + 1)
-    end  
-
-  fun between_right_inclusive(key: U64, start: U64, end_: U64): Bool =>  
-    if start < end then   
-      (start < key) and (key <= end_)
-    else   
-      (start < key) or (key <= end_)
+  fun between_right_inclusive(key: U64): Bool =>
+    if _id < _successor_id then
+      (_id < key) and (key <= _successor_id)
+    else
+      (_id < key) or (key <= _successor_id)
     end
