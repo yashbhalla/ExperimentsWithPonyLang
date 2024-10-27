@@ -17,7 +17,7 @@ actor Main
 
 actor ChordNetwork
   let _env: Env
-  let _node_ids: Array[U64]
+  let _node_ids: Array[U64] val
   let _nodes: Map[U64, ChordNode]
   let _num_nodes: USize
   let _num_requests: USize
@@ -30,29 +30,31 @@ actor ChordNetwork
     _env = env
     _num_nodes = num_nodes
     _num_requests = num_requests
-    _node_ids = Array[U64](num_nodes)
+    _node_ids = recover val Array[U64](_num_nodes) end
     _nodes = Map[U64, ChordNode]
     _rng = Rand(Time.nanos().u64())
 
   be initialize() =>
+    let temp_node_ids = Array[U64](_num_nodes)
     for i in Range(0, _num_nodes) do
       let id = _rng.u64()
       let node = ChordNode(this, id, _m)
-      _node_ids.push(id)
+      temp_node_ids.push(id)
       _nodes(id) = node
     end
 
     try
-      bubble_sort(_node_ids)?
+      bubble_sort(temp_node_ids)?
+      let sorted_node_ids = recover val temp_node_ids.clone() end
 
       for i in Range(0, _num_nodes) do
         let next = (i + 1) % _num_nodes
-        _nodes(_node_ids(i)?)?.set_successor(_node_ids(next)?)
+        _nodes(sorted_node_ids(i)?)?.set_successor(sorted_node_ids(next)?)
       end
 
       // Initialize finger tables
-      for node_id in _node_ids.values() do
-        _nodes(node_id)?.initialize_finger_table(_node_ids)
+      for node_id in sorted_node_ids.values() do
+        _nodes(node_id)?.initialize_finger_table(sorted_node_ids)
       end
 
       for node in _nodes.values() do
@@ -94,7 +96,7 @@ actor ChordNode
   let _id: U64
   var _successor_id: U64 = 0
   let _rng: Rand
-  let _finger_table: Array[U64]
+  let _finger_table: Array[U64] ref
   let _m: USize
 
   new create(network: ChordNetwork, node_id: U64, m: USize) =>
@@ -102,7 +104,7 @@ actor ChordNode
     _id = node_id
     _rng = Rand(Time.nanos().u64())
     _m = m
-    _finger_table = Array[U64].init(0, _m)
+    _finger_table = Array[U64].init(0, m)
 
   be set_successor(succ_id: U64) =>
     _successor_id = succ_id
@@ -110,11 +112,11 @@ actor ChordNode
 
   be initialize_finger_table(node_ids: Array[U64] val) =>
     for i in Range(0, _m) do
-      let finger_start = (_id + (1 << i)) and ((1 << _m) - 1).u64()
+      let finger_start = (_id + (1 << i.u64())) and ((1 << _m.u64()) - 1)
       _finger_table(i) = find_successor(finger_start, node_ids)
     end
 
-  fun find_successor(id: U64, node_ids: Array[U64]): U64 =>
+  fun find_successor(id: U64, node_ids: Array[U64] val): U64 =>
     for node_id in node_ids.values() do
       if between_right_inclusive(id) then
         return node_id
@@ -137,8 +139,8 @@ actor ChordNode
     end
 
   fun closest_preceding_finger(id: U64): U64 =>
-    for i in Range(0, _m).reverse() do
-      if between_exclusive(_finger_table(i)) then
+    for i in Range[USize](0, _m).reverse() do
+      if between_right_inclusive(_finger_table(i)) then
         return _finger_table(i)
       end
     end
@@ -149,11 +151,4 @@ actor ChordNode
       (_id < key) and (key <= _successor_id)
     else
       (_id < key) or (key <= _successor_id)
-    end
-
-  fun between_exclusive(key: U64): Bool =>
-    if _id < _successor_id then
-      (_id < key) and (key < _successor_id)
-    else
-      (_id < key) or (key < _successor_id)
     end
