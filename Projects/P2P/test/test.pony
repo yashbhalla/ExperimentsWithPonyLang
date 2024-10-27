@@ -30,31 +30,48 @@ actor ChordNetwork
     _env = env
     _num_nodes = num_nodes
     _num_requests = num_requests
-    _node_ids = recover val Array[U64](_num_nodes) end
-    _nodes = Map[U64, ChordNode]
     _rng = Rand(Time.nanos().u64())
+    
+    _node_ids = recover val
+      let arr = Array[U64](_num_nodes)
+      for i in Range(0, _num_nodes) do
+        arr.push(_rng.u64())
+      end
+      sort(arr)
+      arr
+    end
+    _nodes = Map[U64, ChordNode]
+
+  fun sort(arr: Array[U64]): Array[U64] =>
+    let n = arr.size()
+    for i in Range(0, n) do
+      for j in Range(0, n - i - 1) do
+        try
+          if arr(j)? > arr(j + 1)? then
+            let temp = arr(j)?
+            arr(j)? = arr(j + 1)?
+            arr(j + 1)? = temp
+          end
+        end
+      end
+    end
+    arr
 
   be initialize() =>
-    let temp_node_ids = Array[U64](_num_nodes)
-    for i in Range(0, _num_nodes) do
-      let id = _rng.u64()
+    for id in _node_ids.values() do
       let node = ChordNode(this, id, _m)
-      temp_node_ids.push(id)
       _nodes(id) = node
     end
 
     try
-      bubble_sort(temp_node_ids)?
-      let sorted_node_ids = recover val temp_node_ids.clone() end
-
       for i in Range(0, _num_nodes) do
         let next = (i + 1) % _num_nodes
-        _nodes(sorted_node_ids(i)?)?.set_successor(sorted_node_ids(next)?)
+        _nodes(_node_ids(i)?)?.set_successor(_node_ids(next)?)
       end
 
       // Initialize finger tables
-      for node_id in sorted_node_ids.values() do
-        _nodes(node_id)?.initialize_finger_table(sorted_node_ids)
+      for node_id in _node_ids.values() do
+        _nodes(node_id)?.initialize_finger_table(_node_ids)
       end
 
       for node in _nodes.values() do
@@ -62,18 +79,6 @@ actor ChordNetwork
       end
     else
       _env.out.print("Error during initialization")
-    end
-
-  fun ref bubble_sort(arr: Array[U64]) ? =>
-    let n = arr.size()
-    for i in Range(0, n) do
-      for j in Range(0, n - i - 1) do
-        if arr(j)? > arr(j + 1)? then
-          let temp = arr(j)?
-          arr(j)? = arr(j + 1)?
-          arr(j + 1)? = temp
-        end
-      end
     end
 
   be report_hops(hops: U64) =>
@@ -139,10 +144,12 @@ actor ChordNode
     end
 
   fun closest_preceding_finger(id: U64): U64 =>
-    for i in Range[USize](0, _m).reverse() do
+    var i: USize = _m - 1
+    while i > 0 do
       if between_right_inclusive(_finger_table(i)) then
         return _finger_table(i)
       end
+      i = i - 1
     end
     _successor_id
 
