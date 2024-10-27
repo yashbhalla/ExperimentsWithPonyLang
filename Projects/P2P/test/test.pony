@@ -24,6 +24,7 @@ actor ChordNetwork
   var _total_hops: U64 = 0
   var _total_requests: U64 = 0
   let _rng: Rand
+  let _m: USize = 64 // Assuming 64-bit identifiers
 
   new create(env: Env, num_nodes: USize, num_requests: USize) =>
     _env = env
@@ -36,7 +37,7 @@ actor ChordNetwork
   be initialize() =>
     for i in Range(0, _num_nodes) do
       let id = _rng.u64()
-      let node = ChordNode(this, id)
+      let node = ChordNode(this, id, _m)
       _node_ids.push(id)
       _nodes(id) = node
     end
@@ -47,6 +48,11 @@ actor ChordNetwork
       for i in Range(0, _num_nodes) do
         let next = (i + 1) % _num_nodes
         _nodes(_node_ids(i)?)?.set_successor(_node_ids(next)?)
+      end
+
+      // Initialize finger tables
+      for node_id in _node_ids.values() do
+        _nodes(node_id)?.initialize_finger_table(_node_ids)
       end
 
       for node in _nodes.values() do
@@ -88,14 +94,33 @@ actor ChordNode
   let _id: U64
   var _successor_id: U64 = 0
   let _rng: Rand
+  let _finger_table: Array[U64]
+  let _m: USize
 
-  new create(network: ChordNetwork, node_id: U64) =>
+  new create(network: ChordNetwork, node_id: U64, m: USize) =>
     _network = network
     _id = node_id
     _rng = Rand(Time.nanos().u64())
+    _m = m
+    _finger_table = Array[U64].init(0, _m)
 
   be set_successor(succ_id: U64) =>
     _successor_id = succ_id
+    _finger_table(0) = succ_id
+
+  be initialize_finger_table(node_ids: Array[U64] val) =>
+    for i in Range(0, _m) do
+      let finger_start = (_id + (1 << i)) and ((1 << _m) - 1).u64()
+      _finger_table(i) = find_successor(finger_start, node_ids)
+    end
+
+  fun find_successor(id: U64, node_ids: Array[U64]): U64 =>
+    for node_id in node_ids.values() do
+      if between_right_inclusive(id) then
+        return node_id
+      end
+    end
+    node_ids(0)?
 
   be simulate_requests(num_requests: USize) =>
     for _ in Range(0, num_requests) do
@@ -107,12 +132,28 @@ actor ChordNode
     if between_right_inclusive(key) then
       _network.report_hops(hops + 1)
     else
-      _network.lookup(key, _successor_id, hops + 1)
+      let next_node = closest_preceding_finger(key)
+      _network.lookup(key, next_node, hops + 1)
     end
+
+  fun closest_preceding_finger(id: U64): U64 =>
+    for i in Range(0, _m).reverse() do
+      if between_exclusive(_finger_table(i)) then
+        return _finger_table(i)
+      end
+    end
+    _successor_id
 
   fun between_right_inclusive(key: U64): Bool =>
     if _id < _successor_id then
       (_id < key) and (key <= _successor_id)
     else
       (_id < key) or (key <= _successor_id)
+    end
+
+  fun between_exclusive(key: U64): Bool =>
+    if _id < _successor_id then
+      (_id < key) and (key < _successor_id)
+    else
+      (_id < key) or (key < _successor_id)
     end
