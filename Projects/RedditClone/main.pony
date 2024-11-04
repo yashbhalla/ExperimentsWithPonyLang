@@ -1,5 +1,4 @@
-use "reddit_engine"
-use "simulator"
+
 
 actor Main
   new create(env: Env) =>
