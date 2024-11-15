@@ -1,4 +1,4 @@
-
+use "time"
 
 actor Main
   new create(env: Env) =>

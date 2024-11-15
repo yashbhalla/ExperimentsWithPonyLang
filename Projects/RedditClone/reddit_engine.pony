@@ -8,100 +8,72 @@ actor RedditEngine
   new create() =>
     None
 
-  fun ref register_account(username: String, password: String): Bool =>
+  be register_account(username: String val, password: String val) =>
     if not accounts.contains(username) then
       let account = Account(username, password)
       accounts(username) = account
-      true
-    else
-      false
     end
 
-  fun ref create_subreddit(name: String): Bool =>
+  be create_subreddit(name: String val) =>
     if not subreddits.contains(name) then
       let subreddit = SubReddit(name)
       subreddits(name) = subreddit
-      true
-    else
-      false
     end
 
-  fun ref join_subreddit(username: String, subreddit_name: String): Bool =>
+  be join_subreddit(username: String val, subreddit_name: String val) =>
     try
       let account = accounts(username)?
       let subreddit = subreddits(subreddit_name)?
       if not subreddit.members.contains(account) then
-        subreddit.members.set(account)
-        account.subscriptions.set(subreddit)
-        true
-      else
-        false
+        subreddit.members.push(account)
+        account.subscriptions.push(subreddit)
       end
-    else
-      false
     end
 
-  fun ref leave_subreddit(username: String, subreddit_name: String): Bool =>
+  be leave_subreddit(username: String val, subreddit_name: String val) =>
     try
       let account = accounts(username)?
       let subreddit = subreddits(subreddit_name)?
       if subreddit.members.contains(account) then
-        subreddit.members.unset(account)
-        account.subscriptions.unset(subreddit)
-        true
-      else
-        false
+        subreddit.members.remove(account)
+        account.subscriptions.remove(subreddit)
       end
-    else
-      false
     end
 
-  fun ref post_in_subreddit(username: String, subreddit_name: String, content: String): Bool =>
+  be post_in_subreddit(username: String val, subreddit_name: String val, content: String val) =>
     try
       let account = accounts(username)?
       let subreddit = subreddits(subreddit_name)?
       let post = Post(account, content)
       subreddit.posts.push(post)
-      true
-    else
-      false
     end
 
-  fun ref comment_on_post(username: String, subreddit_name: String, post_index: USize, content: String): Bool =>
+  be comment_on_post(username: String val, subreddit_name: String val, post_index: USize, content: String val) =>
     try
       let account = accounts(username)?
       let subreddit = subreddits(subreddit_name)?
       let post = subreddit.posts(post_index)?
       let comment = Comment(account, content)
       post.comments.push(comment)
-      true
-    else
-      false
     end
 
-  fun ref upvote_post(username: String, subreddit_name: String, post_index: USize): Bool =>
+  be upvote_post(username: String val, subreddit_name: String val, post_index: USize) =>
     try
       let subreddit = subreddits(subreddit_name)?
       let post = subreddit.posts(post_index)?
       post.upvotes = post.upvotes + 1
       post.author.karma = post.author.karma + 1
-      true
-    else
-      false
     end
 
-  fun ref downvote_post(username: String, subreddit_name: String, post_index: USize): Bool =>
+  be downvote_post(username: String val, subreddit_name: String val, post_index: USize) =>
     try
       let subreddit = subreddits(subreddit_name)?
       let post = subreddit.posts(post_index)?
       post.downvotes = post.downvotes + 1
       post.author.karma = post.author.karma - 1
-      true
-    else
-      false
     end
 
-  fun ref get_feed(username: String): Array[Post] =>
+  fun get_feed(username: String val): Array[Post] =>
     let feed = Array[Post]
     try
       let account = accounts(username)?
@@ -113,20 +85,21 @@ actor RedditEngine
     end
     feed
 
-  fun ref send_direct_message(sender: String, receiver: String, content: String): Bool =>
+  be send_direct_message(sender: String val, receiver: String val, content: String val) =>
     try
       let sender_account = accounts(sender)?
       let receiver_account = accounts(receiver)?
       let message = Message(sender_account, receiver_account, content)
       receiver_account.messages.push(message)
-      true
-    else
-      false
     end
 
-  fun ref get_direct_messages(username: String): Array[Message] =>
+  fun get_direct_messages(username: String val): Array[Message] =>
     try
-      accounts(username)?.messages.values()
+      let messages = Array[Message]
+      for message in accounts(username)?.messages.values() do
+        messages.push(message)
+      end
+      messages
     else
       Array[Message]
     end
