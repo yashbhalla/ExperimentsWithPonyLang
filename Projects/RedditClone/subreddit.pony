@@ -3,7 +3,7 @@ use "collections"
 class SubReddit is (Hashable & Equatable[SubReddit])
   let name: String
   let members: Array[Account] = Array[Account]
-  let posts: List[Post] = List[Post]
+  let posts: Array[Post] = Array[Post]
 
   new create(name': String) =>
     name = name'
@@ -11,5 +11,5 @@ class SubReddit is (Hashable & Equatable[SubReddit])
   fun hash(): USize =>
     name.hash()
 
-  fun eq(that: SubReddit): Bool =>
+  fun eq(that: SubReddit box): Bool =>
     this.name == that.name

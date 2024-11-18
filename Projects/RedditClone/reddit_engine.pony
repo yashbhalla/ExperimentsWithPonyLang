@@ -34,10 +34,8 @@ actor RedditEngine
     try
       let account = accounts(username)?
       let subreddit = subreddits(subreddit_name)?
-      if subreddit.members.contains(account) then
-        subreddit.members.remove(account)
-        account.subscriptions.remove(subreddit)
-      end
+      subreddit.members.remove(account)
+      account.subscriptions.remove(subreddit)
     end
 
   be post_in_subreddit(username: String val, subreddit_name: String val, content: String val) =>

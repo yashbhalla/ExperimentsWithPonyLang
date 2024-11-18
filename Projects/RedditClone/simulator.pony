@@ -20,7 +20,13 @@ actor Simulator
     _num_subreddits = num_subreddits
     _simulation_time = simulation_time
 
-    fun ref _create_users() =>
+  be run() =>
+    _create_users()
+    _create_subreddits()
+    _simulate_activity()
+    _print_statistics()
+
+  fun ref _create_users() =>
     for i in Range(0, _num_users) do
       let username = "user" + i.string()
       let password = "pass" + i.string()
@@ -34,8 +40,37 @@ actor Simulator
       _engine.create_subreddit(consume subreddit_name)
       _subreddits.push("subreddit" + i.string())
     end
-  
-    fun ref _simulate_comment() =>
+
+  fun ref _simulate_activity() =>
+    let start_time = Time.seconds()
+    while (Time.seconds() - start_time) < _simulation_time do
+      let action = _rand.int(5).usize()
+      match action
+      | 0 => _simulate_join_subreddit()
+      | 1 => _simulate_leave_subreddit()
+      | 2 => _simulate_post()
+      | 3 => _simulate_comment()
+      | 4 => _simulate_vote()
+      end
+    end
+
+  fun ref _simulate_join_subreddit() =>
+    let user = _random_user()
+    let subreddit = _random_subreddit()
+    _engine.join_subreddit(consume user, consume subreddit)
+
+  fun ref _simulate_leave_subreddit() =>
+    let user = _random_user()
+    let subreddit = _random_subreddit()
+    _engine.leave_subreddit(consume user, consume subreddit)
+
+  fun ref _simulate_post() =>
+    let user = _random_user()
+    let subreddit = _random_subreddit()
+    let content = "This is a test post from " + user
+    _engine.post_in_subreddit(consume user, consume subreddit, consume content)
+
+  fun ref _simulate_comment() =>
     let user = _random_user()
     let subreddit = _random_subreddit()
     let post_index = _rand.usize() % _num_users
@@ -65,7 +100,7 @@ actor Simulator
     else
       ""
     end
-  
+
   fun _print_statistics() =>
     _env.out.print("Simulation completed")
     _env.out.print("Number of users: " + _num_users.string())
