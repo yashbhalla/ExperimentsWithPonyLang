@@ -35,9 +35,13 @@ actor RedditEngine
       let account = accounts(username)?
       let subreddit = subreddits(subreddit_name)?
       let index = subreddit.members.find(account)
-      if index != -1 then subreddit.members.remove(index, 1)
+      if index != -1 then 
+        subreddit.members.remove(index, 1)
+      end
       let sub_index = account.subscriptions.find(subreddit)
-      if sub_index != -1 then account.subscriptions.remove(sub_index, 1)
+      if sub_index != -1 then 
+        account.subscriptions.remove(sub_index, 1)
+      end
     end
 
   be post_in_subreddit(username: String val, subreddit_name: String val, content: String val) =>

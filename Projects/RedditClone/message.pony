@@ -1,6 +1,6 @@
 use "time"
 
-class Message
+class ref Message
   let sender: Account
   let receiver: Account
   let content: String

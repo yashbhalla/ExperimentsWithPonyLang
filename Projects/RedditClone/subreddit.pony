@@ -3,7 +3,7 @@ use "collections"
 class SubReddit is (Hashable & Equatable[SubReddit])
   let name: String
   let members: Array[Account] = Array[Account]
-  let posts: Array[Post] = Array[Post]
+  let posts: Array[Post ref] = Array[Post ref]
 
   new create(name': String) =>
     name = name'

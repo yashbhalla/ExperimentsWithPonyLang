@@ -1,3 +1,4 @@
+use "time"
 use "collections"
 
 class ref Comment
