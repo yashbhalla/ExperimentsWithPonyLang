@@ -44,7 +44,7 @@ actor Simulator
   fun ref _simulate_activity() =>
     let start_time = Time.seconds()
     while (Time.seconds() - start_time) < _simulation_time do
-      let action = _rand.int(5).usize()
+      let action = _rand.usize() % 5
       match action
       | 0 => _simulate_join_subreddit()
       | 1 => _simulate_leave_subreddit()
@@ -81,7 +81,7 @@ actor Simulator
     let user = _random_user()
     let subreddit = _random_subreddit()
     let post_index = _rand.usize() % _num_users
-    if _rand.bool() then
+    if _rand.real() < 0.5 then
       _engine.upvote_post(consume user, consume subreddit, post_index)
     else
       _engine.downvote_post(consume user, consume subreddit, post_index)

@@ -1,13 +1,12 @@
-use "time"
 use "collections"
 
-class Comment
+class ref Comment
   let author: Account
   let content: String
   let timestamp: I64
   var upvotes: I64 = 0
   var downvotes: I64 = 0
-  let replies: List[Comment] = List[Comment]
+  let replies: Array[Comment] = Array[Comment]
 
   new create(author': Account, content': String) =>
     author = author'
