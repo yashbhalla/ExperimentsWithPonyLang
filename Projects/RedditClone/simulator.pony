@@ -11,6 +11,10 @@ actor Simulator
   let _simulation_time: I64
   let _users: Array[String] = Array[String]
   let _subreddits: Array[String] = Array[String]
+  var _post_count: USize = 0
+  var _comment_count: USize = 0
+  var _upvote_count: USize = 0
+  var _downvote_count: USize = 0
 
   new create(env: Env, engine: RedditEngine tag, num_users: USize, num_subreddits: USize, simulation_time: I64) =>
     _env = env
@@ -69,6 +73,7 @@ actor Simulator
     let subreddit = _random_subreddit()
     let content = "This is a test post from " + user
     _engine.post_in_subreddit(consume user, consume subreddit, consume content)
+    _post_count = _post_count + 1
 
   fun ref _simulate_comment() =>
     let user = _random_user()
@@ -76,6 +81,7 @@ actor Simulator
     let post_index = _rand.usize() % _num_users
     let content = "This is a test comment from " + user
     _engine.comment_on_post(consume user, consume subreddit, post_index, consume content)
+    _comment_count = _comment_count + 1
 
   fun ref _simulate_vote() =>
     let user = _random_user()
@@ -83,8 +89,10 @@ actor Simulator
     let post_index = _rand.usize() % _num_users
     if _rand.real() < 0.5 then
       _engine.upvote_post(consume user, consume subreddit, post_index)
+      _upvote_count = _upvote_count + 1
     else
       _engine.downvote_post(consume user, consume subreddit, post_index)
+      _downvote_count = _downvote_count + 1
     end
 
   fun ref _random_user(): String =>
@@ -106,3 +114,7 @@ actor Simulator
     _env.out.print("Number of users: " + _num_users.string())
     _env.out.print("Number of subreddits: " + _num_subreddits.string())
     _env.out.print("Simulation time: " + _simulation_time.string() + " seconds")
+    _env.out.print("Total posts: " + _post_count.string())
+    _env.out.print("Total comments: " + _comment_count.string())
+    _env.out.print("Total upvotes: " + _upvote_count.string())
+    _env.out.print("Total downvotes: " + _downvote_count.string())
