@@ -5,7 +5,7 @@ class Account is (Hashable & Equatable[Account])
   let password: String
   var karma: I64 = 0
   let subscriptions: Array[SubReddit] = Array[SubReddit]
-  let messages: Array[Message ref] = Array[Message ref]
+  let messages: Array[Message tag] = Array[Message tag]
 
   new create(username': String, password': String) =>
     username = username'

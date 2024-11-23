@@ -34,11 +34,11 @@ actor RedditEngine
     try
       let account = accounts(username)?
       let subreddit = subreddits(subreddit_name)?
-      let index = subreddit.members.find(account)
+      let index = subreddit.members.find(account)?
       if index != -1 then 
         subreddit.members.remove(index, 1)
       end
-      let sub_index = account.subscriptions.find(subreddit)
+      let sub_index = account.subscriptions.find(subreddit)?
       if sub_index != -1 then 
         account.subscriptions.remove(sub_index, 1)
       end
@@ -77,8 +77,8 @@ actor RedditEngine
       post.author.karma = post.author.karma - 1
     end
 
-  fun get_feed(username: String val): Array[Post] =>
-    let feed = Array[Post]
+  fun get_feed(username: String val): Array[Post tag] =>
+    let feed = Array[Post tag]
     try
       let account = accounts(username)?
       for subreddit in account.subscriptions.values() do
@@ -97,13 +97,13 @@ actor RedditEngine
       receiver_account.messages.push(message)
     end
 
-  fun get_direct_messages(username: String val): Array[Message] =>
+  fun get_direct_messages(username: String val): Array[Message tag] =>
     try
-      let messages = Array[Message]
+      let messages = Array[Message tag]
       for message in accounts(username)?.messages.values() do
         messages.push(message)
       end
       messages
     else
-      Array[Message]
+      Array[Message tag]
     end
