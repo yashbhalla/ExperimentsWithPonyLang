@@ -1,5 +1,5 @@
-use "time"
 use "collections"
+use "time"
 
 class ref Comment
   let author: Account

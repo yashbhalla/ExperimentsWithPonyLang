@@ -5,9 +5,6 @@ actor RedditEngine
   let accounts: Map[String, Account] = Map[String, Account]
   let subreddits: Map[String, SubReddit] = Map[String, SubReddit]
 
-  new create() =>
-    None
-
   be register_account(username: String val, password: String val) =>
     if not accounts.contains(username) then
       let account = Account(username, password)
@@ -35,13 +32,9 @@ actor RedditEngine
       let account = accounts(username)?
       let subreddit = subreddits(subreddit_name)?
       let index = subreddit.members.find(account)?
-      if index != -1 then 
-        subreddit.members.remove(index, 1)
-      end
+      subreddit.members.remove(index, 1)
       let sub_index = account.subscriptions.find(subreddit)?
-      if sub_index != -1 then 
-        account.subscriptions.remove(sub_index, 1)
-      end
+      account.subscriptions.remove(sub_index, 1)
     end
 
   be post_in_subreddit(username: String val, subreddit_name: String val, content: String val) =>

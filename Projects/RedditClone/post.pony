@@ -1,5 +1,5 @@
-use "time"
 use "collections"
+use "time"
 
 class ref Post
   let author: Account
