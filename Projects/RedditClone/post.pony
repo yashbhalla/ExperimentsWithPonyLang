@@ -1,7 +1,7 @@
 use "collections"
 use "time"
 
-class ref Post
+class ref RedditPost
   let author: Account
   let content: String
   let timestamp: I64
