@@ -42,3 +42,7 @@ actor Main
     
     // Get direct messages
     client.get_direct_messages("user2")
+
+    // Run simulation
+    let simulator = Simulator(env, engine, 1000, 50, 60)
+    simulator.run()
