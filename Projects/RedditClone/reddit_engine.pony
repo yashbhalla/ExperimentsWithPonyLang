@@ -75,8 +75,8 @@ actor RedditEngine
       post.author.karma = post.author.karma - 1
     end
 
-  fun get_feed(username: String val): Array[Post tag] =>
-    let feed = Array[Post tag]
+  fun get_feed(username: String val): Array[RedditPost tag] =>
+    let feed = Array[RedditPost tag]
     try
       let account = accounts(username)?
       for subreddit in account.subscriptions.values() do

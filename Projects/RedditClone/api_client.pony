@@ -1,13 +1,13 @@
-use "http"
+use "http_server"
 use "json"
 
 actor ApiClient
   let _env: Env
-  let _http: HTTPClient
+  let _http: HTTPClientWrapper
 
   new create(env: Env, host: String, port: String) =>
     _env = env
-    _http = HTTPClient(env.root as AmbientAuth)
+    _http = HTTPClientWrapper(env.root as AmbientAuth)
 
   be register_account(username: String, password: String) =>
     let url = URL.build("http://localhost:8080/register")?
@@ -45,15 +45,15 @@ actor ApiClient
     })
 
   be post_in_subreddit(username: String, subreddit_name: String, content: String) =>
-    let url = URL.build("http://localhost:8080/post")?
+    let url = client_http.URL.build("http://localhost:8080/post")?
     let body = JsonObject
     body.update("username", username)
     body.update("subreddit_name", subreddit_name)
     body.update("content", content)
-    let req = Payload.request("POST", url)
+    let req = client_http.Payload.request("POST", url)
     req.update("Content-Type", "application/json")
     req.update("body", body.string())
-    _http(consume req, {(res: Payload val) =>
+    _http(consume req, {(res: client_http.Payload val) =>
       _env.out.print("Response: " + res.status.string() + " " + res.body)
     })
 
@@ -110,3 +110,37 @@ actor ApiClient
     _http(consume req, {(res: Payload val) =>
       _env.out.print("Response: " + res.status.string() + " " + res.body)
     })
+
+class HTTPClientWrapper
+  let _client: TCPConnectionNotify
+
+  new create(auth: AmbientAuth) =>
+    _client = TCPConnectionNotify(auth)
+
+  fun ref send(req: Payload val, callback: {(Payload val)} val) =>
+    let conn = TCPConnection(
+      auth,
+      recover HTTPClientConnectionNotify(req, callback) end
+    )
+    conn.connect(req.url.host, req.url.service)
+
+class HTTPClientConnectionNotify is TCPConnectionNotify
+  let _req: Payload val
+  let _callback: {(Payload val)} val
+
+  new iso create(req: Payload val, callback: {(Payload val)} val) =>
+    _req = req
+    _callback = callback
+
+  fun ref connected(conn: TCPConnection ref) =>
+    conn.write(_req.write())
+
+  fun ref received(conn: TCPConnection ref, data: Array[U8] iso, times: USize): Bool =>
+    let payload = Payload.response(200, consume data)
+    _callback(payload)
+    conn.close()
+    false
+
+  fun ref connect_failed(conn: TCPConnection ref) =>
+    let payload = Payload.response(500, "Connection failed")
+    _callback(payload)

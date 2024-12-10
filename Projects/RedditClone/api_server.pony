@@ -52,51 +52,106 @@ class ApiHandler is HTTPHandler
     end
 
   fun handle_create_subreddit(request: Payload val): Payload iso^ =>
-  try
-    let json = JsonDoc.from_string(request.body)?
-    let name = json.data.as_object()?.get_string("name")?
-    _engine.create_subreddit(name)
-    Payload.response(200, "Subreddit created")
-  else
-    Payload.response(400, "Invalid request")
-  end
-
-fun handle_join_subreddit(request: Payload val): Payload iso^ =>
-  try
-    let json = JsonDoc.from_string(request.body)?
-    let username = json.data.as_object()?.get_string("username")?
-    let subreddit_name = json.data.as_object()?.get_string("subreddit_name")?
-    _engine.join_subreddit(username, subreddit_name)
-    Payload.response(200, "Joined subreddit")
-  else
-    Payload.response(400, "Invalid request")
-  end
-
-fun handle_post(request: Payload val): Payload iso^ =>
-  try
-    let json = JsonDoc.from_string(request.body)?
-    let username = json.data.as_object()?.get_string("username")?
-    let subreddit_name = json.data.as_object()?.get_string("subreddit_name")?
-    let content = json.data.as_object()?.get_string("content")?
-    _engine.post_in_subreddit(username, subreddit_name, content)
-    Payload.response(200, "Post created")
-  else
-    Payload.response(400, "Invalid request")
-  end
-
-fun handle_get_feed(request: Payload val): Payload iso^ =>
-  try
-    let username = request.url.query.get_or_else("username", "")?
-    let feed = _engine.get_feed(username)
-    let json = JsonArray
-    for post in feed.values() do
-      let post_json = JsonObject
-      post_json.update("author", post.author.username)
-      post_json.update("content", post.content)
-      post_json.update("timestamp", post.timestamp.string())
-      json.push(post_json)
+    try
+      let json = JsonDoc.from_string(request.body)?
+      let name = json.data.as_object()?.get_string("name")?
+      _engine.create_subreddit(name)
+      Payload.response(200, "Subreddit created")
+    else
+      Payload.response(400, "Invalid request")
     end
-    Payload.response(200, json.string())
-  else
-    Payload.response(400, "Invalid request")
-  end
+
+  fun handle_join_subreddit(request: Payload val): Payload iso^ =>
+    try
+      let json = JsonDoc.from_string(request.body)?
+      let username = json.data.as_object()?.get_string("username")?
+      let subreddit_name = json.data.as_object()?.get_string("subreddit_name")?
+      _engine.join_subreddit(username, subreddit_name)
+      Payload.response(200, "Joined subreddit")
+    else
+      Payload.response(400, "Invalid request")
+    end
+
+  fun handle_post(request: Payload val): Payload iso^ =>
+    try
+      let json = JsonDoc.from_string(request.body)?
+      let username = json.data.as_object()?.get_string("username")?
+      let subreddit_name = json.data.as_object()?.get_string("subreddit_name")?
+      let content = json.data.as_object()?.get_string("content")?
+      _engine.post_in_subreddit(username, subreddit_name, content)
+      Payload.response(200, "Post created")
+    else
+      Payload.response(400, "Invalid request")
+    end
+
+  fun handle_comment(request: Payload val): Payload iso^ =>
+    try
+      let json = JsonDoc.from_string(request.body)?
+      let username = json.data.as_object()?.get_string("username")?
+      let subreddit_name = json.data.as_object()?.get_string("subreddit_name")?
+      let post_index = json.data.as_object()?.get_u64("post_index")?.usize()?
+      let content = json.data.as_object()?.get_string("content")?
+      _engine.comment_on_post(username, subreddit_name, post_index, content)
+      Payload.response(200, "Comment added")
+    else
+      Payload.response(400, "Invalid request")
+    end
+
+  fun handle_upvote(request: Payload val): Payload iso^ =>
+    try
+      let json = JsonDoc.from_string(request.body)?
+      let username = json.data.as_object()?.get_string("username")?
+      let subreddit_name = json.data.as_object()?.get_string("subreddit_name")?
+      let post_index = json.data.as_object()?.get_u64("post_index")?.usize()?
+      _engine.upvote_post(username, subreddit_name, post_index)
+      http_server.Payload.response(200, "Post upvoted")
+    else
+      http_server.Payload.response(400, "Invalid request")
+    end
+
+  fun handle_downvote(request: http_server.Payload val): http_server.Payload iso^ =>
+    try
+      let json = JsonDoc.from_string(request.body)?
+      let username = json.data.as_object()?.get_string("username")?
+      let subreddit_name = json.data.as_object()?.get_string("subreddit_name")?
+      let post_index = json.data.as_object()?.get_u64("post_index")?.usize()?
+      _engine.downvote_post(username, subreddit_name, post_index)
+      Payload.response(200, "Post downvoted")
+    else
+      Payload.response(400, "Invalid request")
+    end
+
+  fun handle_get_feed(request: Payload val): Payload iso^ =>
+    try
+      let username = request.url.query.get_or_else("username", "")?
+      let feed = _engine.get_feed(username)
+      let json = JsonArray
+      for post in feed.values() do
+        let post_json = JsonObject
+        post_json.update("author", post.author.username)
+        post_json.update("content", post.content)
+        post_json.update("timestamp", post.timestamp.string())
+        json.push(post_json)
+      end
+      Payload.response(200, json.string())
+    else
+      Payload.response(400, "Invalid request")
+    end
+
+  fun handle_get_messages(request: Payload val): Payload iso^ =>
+    try
+      let username = request.url.query.get_or_else("username", "")?
+      let messages = _engine.get_direct_messages(username)
+      let json = JsonArray
+      for message in messages.values() do
+        let message_json = JsonObject
+        message_json.update("sender", message.sender.username)
+        message_json.update("content", message.content)
+        message_json.update("timestamp", message.timestamp.string())
+        json.push(message_json)
+      end
+      Payload.response(200, json.string())
+    else
+      Payload.response(400, "Invalid request")
+    end
+

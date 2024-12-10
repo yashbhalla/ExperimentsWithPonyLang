@@ -8,10 +8,6 @@
     {
       "locator": "github.com/ponylang/json.git",
       "version": ""
-    },
-    {
-      "locator": "github.com/ponylang/http.git",
-      "version": ""
     }
   ],
   "info": {
