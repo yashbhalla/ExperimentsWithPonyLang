@@ -1,5 +1,6 @@
-use "http_server"
+use "net"
 use "json"
+use "http_server"
 
 actor ApiServer
   let _env: Env
@@ -104,12 +105,12 @@ class ApiHandler is HTTPHandler
       let subreddit_name = json.data.as_object()?.get_string("subreddit_name")?
       let post_index = json.data.as_object()?.get_u64("post_index")?.usize()?
       _engine.upvote_post(username, subreddit_name, post_index)
-      http_server.Payload.response(200, "Post upvoted")
+      Payload.response(200, "Post upvoted")
     else
-      http_server.Payload.response(400, "Invalid request")
+      Payload.response(400, "Invalid request")
     end
 
-  fun handle_downvote(request: http_server.Payload val): http_server.Payload iso^ =>
+  fun handle_downvote(request: Payload val): Payload iso^ =>
     try
       let json = JsonDoc.from_string(request.body)?
       let username = json.data.as_object()?.get_string("username")?
