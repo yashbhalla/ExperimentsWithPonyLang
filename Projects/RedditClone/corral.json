@@ -3,11 +3,11 @@
   "deps": [
     {
       "locator": "github.com/ponylang/http_server.git",
-      "version": "0.6.2"
+      "version": "main"
     },
     {
       "locator": "github.com/ponylang/json.git",
-      "version": ""
+      "version": "main"
     }
   ],
   "info": {

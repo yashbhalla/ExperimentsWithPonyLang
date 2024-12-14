@@ -6,7 +6,7 @@
     },
     {
       "locator": "github.com/ponylang/http_server.git",
-      "revision": "0.6.2"
+      "revision": "main"
     },
     {
       "locator": "github.com/ponylang/json.git",

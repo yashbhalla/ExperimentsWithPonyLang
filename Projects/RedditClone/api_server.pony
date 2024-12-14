@@ -1,16 +1,16 @@
-use "net"
+/*use "net"
 use "json"
 use "http_server"
 
 actor ApiServer
   let _env: Env
   let _engine: RedditEngine tag
-  let _server: HTTPServer
+  let _server: Server
 
   new create(env: Env, engine: RedditEngine tag, host: String, port: String) =>
     _env = env
     _engine = engine
-    _server = HTTPServer(env.root as AmbientAuth,
+    _server = Server(env.root as AmbientAuth,
       recover
         let config = ServerConfig(host, port)
         config.handler(ApiHandler(_engine))
@@ -20,7 +20,7 @@ actor ApiServer
   be run() =>
     _server.listen()
 
-class ApiHandler is HTTPHandler
+class ApiHandler is Handler
   let _engine: RedditEngine tag
 
   new create(engine: RedditEngine tag) =>
@@ -154,5 +154,187 @@ class ApiHandler is HTTPHandler
       Payload.response(200, json.string())
     else
       Payload.response(400, "Invalid request")
+    end
+
+*/
+
+use "net"
+use "json"
+
+actor ApiServer
+  let _env: Env
+  let _engine: RedditEngine tag
+  let _listener: TCPListener
+
+  new create(env: Env, engine: RedditEngine tag, host: String, port: String) =>
+    _env = env
+    _engine = engine
+    _listener = TCPListener(TCPListenAuth(env.root), ApiServerNotify(_engine), host, port)
+
+  be run() =>
+    _listener.listen()
+
+class ApiServerNotify is TCPListenNotify
+  let _engine: RedditEngine tag
+
+  new create(engine: RedditEngine tag) =>
+    _engine = engine
+
+  fun ref connected(listen: TCPListener ref): TCPConnectionNotify iso^ =>
+    ApiHandler(_engine)
+
+  fun ref not_listening(listen: TCPListener ref) =>
+    None
+
+class ApiHandler is TCPConnectionNotify
+  let _engine: RedditEngine tag
+
+  new create(engine: RedditEngine tag) =>
+    _engine = engine
+
+  fun ref received(conn: TCPConnection ref, data: Array[U8] iso, times: USize): Bool =>
+    let request = String.from_array(consume data)
+    try
+      let json = JsonDoc.from_string(request)?
+      let method = json.data.as_object()?.get_string("method")?
+      let path = json.data.as_object()?.get_string("path")?
+      let body = json.data.as_object()?.get_string("body")?
+
+      let response = match (method, path)
+      | ("POST", "/register") => handle_register(body)
+      | ("POST", "/create_subreddit") => handle_create_subreddit(body)
+      | ("POST", "/join_subreddit") => handle_join_subreddit(body)
+      | ("POST", "/post") => handle_post(body)
+      | ("POST", "/comment") => handle_comment(body)
+      | ("POST", "/upvote") => handle_upvote(body)
+      | ("POST", "/downvote") => handle_downvote(body)
+      | ("GET", "/feed") => handle_get_feed(body)
+      | ("GET", "/messages") => handle_get_messages(body)
+      else
+        "404 Not Found"
+      end
+
+      conn.write(response.array())
+    end
+    true
+  
+  fun ref connect_failed(conn: TCPConnection ref) =>
+    None
+
+  fun handle_register(body: String): String =>
+    try
+      let json = JsonDoc.from_string(body)?
+      let username = json.data.as_object()?.get_string("username")?
+      let password = json.data.as_object()?.get_string("password")?
+      _engine.register_account(username, password)
+      "Account registered"
+    else
+      "Invalid request"
+    end
+
+  fun handle_create_subreddit(body: String): String =>
+    try
+      let json = JsonDoc.from_string(body)?
+      let name = json.data.as_object()?.get_string("name")?
+      _engine.create_subreddit(name)
+      "Subreddit created"
+    else
+      "Invalid request"
+    end
+
+  fun handle_join_subreddit(body: String): String =>
+    try
+      let json = JsonDoc.from_string(body)?
+      let username = json.data.as_object()?.get_string("username")?
+      let subreddit_name = json.data.as_object()?.get_string("subreddit_name")?
+      _engine.join_subreddit(username, subreddit_name)
+      "Joined subreddit"
+    else
+      "Invalid request"
+    end
+
+  fun handle_post(body: String): String =>
+    try
+      let json = JsonDoc.from_string(body)?
+      let username = json.data.as_object()?.get_string("username")?
+      let subreddit_name = json.data.as_object()?.get_string("subreddit_name")?
+      let content = json.data.as_object()?.get_string("content")?
+      _engine.post_in_subreddit(username, subreddit_name, content)
+      "Post created"
+    else
+      "Invalid request"
+    end
+
+  fun handle_comment(body: String): String =>
+    try
+      let json = JsonDoc.from_string(body)?
+      let username = json.data.as_object()?.get_string("username")?
+      let subreddit_name = json.data.as_object()?.get_string("subreddit_name")?
+      let post_index = json.data.as_object()?.get_u64("post_index")?.usize()?
+      let content = json.data.as_object()?.get_string("content")?
+      _engine.comment_on_post(username, subreddit_name, post_index, content)
+      "Comment added"
+    else
+      "Invalid request"
+    end
+
+  fun handle_upvote(body: String): String =>
+    try
+      let json = JsonDoc.from_string(body)?
+      let username = json.data.as_object()?.get_string("username")?
+      let subreddit_name = json.data.as_object()?.get_string("subreddit_name")?
+      let post_index = json.data.as_object()?.get_u64("post_index")?.usize()?
+      _engine.upvote_post(username, subreddit_name, post_index)
+      "Post upvoted"
+    else
+      "Invalid request"
+    end
+
+  fun handle_downvote(body: String): String =>
+    try
+      let json = JsonDoc.from_string(body)?
+      let username = json.data.as_object()?.get_string("username")?
+      let subreddit_name = json.data.as_object()?.get_string("subreddit_name")?
+      let post_index = json.data.as_object()?.get_u64("post_index")?.usize()?
+      _engine.downvote_post(username, subreddit_name, post_index)
+      "Post downvoted"
+    else
+      "Invalid request"
+    end
+
+  fun handle_get_feed(body: String): String =>
+    try
+      let json = JsonDoc.from_string(body)?
+      let username = json.data.as_object()?.get_string("username")?
+      let feed = _engine.get_feed(username)
+      let response = JsonArray
+      for post in feed.values() do
+        let post_json = JsonObject
+        post_json.data.update("author", post.author.username)
+        post_json.data.update("content", post.content)
+        post_json.data.update("timestamp", post.timestamp.string())
+        response.data.push(post_json)
+      end
+      response.string()
+    else
+      "Invalid request"
+    end
+
+  fun handle_get_messages(body: String): String =>
+    try
+      let json = JsonDoc.from_string(body)?
+      let username = json.data.as_object()?.get_string("username")?
+      let messages = _engine.get_direct_messages(username)
+      let response = JsonArray
+      for message in messages.values() do
+        let message_json = JsonObject
+        message_json.data.update("sender", message.sender.username)
+        message_json.data.update("content", message.content)
+        message_json.data.update("timestamp", message.timestamp.string())
+        response.data.push(message_json)
+      end
+      response.string()
+    else
+      "Invalid request"
     end
 

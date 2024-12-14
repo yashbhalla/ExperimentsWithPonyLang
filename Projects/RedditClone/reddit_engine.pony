@@ -1,5 +1,4 @@
 use "collections"
-use "http_server"
 use "time"
 
 actor RedditEngine
@@ -46,7 +45,7 @@ actor RedditEngine
     try
       let account = accounts(username)?
       let subreddit = subreddits(subreddit_name)?
-      let post = Post(account, content)
+      let post = RedditPost(account, content)
       subreddit.posts.push(post)
     end
 
@@ -105,3 +104,4 @@ actor RedditEngine
     else
       Array[Message tag]
     end
+
